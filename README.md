@@ -1,4 +1,6 @@
-# EmoVoice
+# Emotion Recognition from Speech
+
+> A portfolio-grade system branded as EmoVoice
 
 [![CI](https://github.com/ayeshafarhath/speech-emotion-recognition/actions/workflows/ci.yml/badge.svg)](https://github.com/ayeshafarhath/speech-emotion-recognition/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
