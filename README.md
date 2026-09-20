@@ -1,92 +1,87 @@
-# Emotion Recognition from Speech
+# Speech Emotion Recognition
 
-> A portfolio-grade system branded as EmoVoice
+A small experimental speech emotion recognition project using Python, PyTorch, and audio feature extraction.
 
-[![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![License](https://img.shields.io/badge/license-MIT-green)](https://opensource.org/licenses/MIT)
+This repository is designed as a practical baseline for speech classification using audio signals. It is intentionally presented as an experimental project rather than a production-ready or benchmarked system.
 
-**EmoVoice** is a speech emotion recognition portfolio project that converts short audio input into predicted emotions with confidence scores. It combines deterministic audio preprocessing, a CNN-BiLSTM-Attention model, and a FastAPI inference API for demonstration and experimentation.
+## Project Goal
 
-## Project highlights
-
-- End-to-end speech audio processing pipeline
-- CNN-BiLSTM-Attention deep learning model
-- FastAPI-based prediction API
-- Clear, modular code structure for portfolio presentation
-- Built with Python 3.10+, PyTorch, Librosa, and FastAPI
+The project explores whether short speech clips can be classified into emotion categories using:
+- audio preprocessing
+- feature extraction
+- a neural classifier
+- a simple inference pipeline
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    A[Audio input] --> B[FastAPI API]
-    B --> C[Feature extraction]
-    C --> D[CNN-BiLSTM-Attention model]
-    D --> E[Emotion prediction]
+The project includes:
+- feature extraction from audio files
+- model definition for a CNN + BiLSTM style architecture
+- training logic
+- prediction/inference flow
+- a small FastAPI application for serving predictions
+
+## Tech Stack
+
+- Python
+- PyTorch
+- Librosa
+- NumPy
+- scikit-learn
+- FastAPI
+- Docker
+- pytest
+
+## Repository Structure
+
+```text
+src/
+  features/
+  inference/
+  models/
+  training/
+api/
+tests/
+requirements.txt
+Dockerfile
+docker-compose.yml
 ```
 
-## Tech stack
+## Getting Started
 
-| Technology | Purpose |
-| --- | --- |
-| Python 3.10+ | Core application logic |
-| Librosa + SoundFile | Audio loading and preprocessing |
-| NumPy | Numerical feature processing |
-| PyTorch | Deep learning model |
-| scikit-learn | Dataset splitting and evaluation utilities |
-| FastAPI | API layer |
-| Uvicorn | ASGI server |
-| pytest + flake8 | Local validation |
-| Docker + Compose | Containerized setup |
-
-## Getting started
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/ayeshafarhath/speech-emotion-recognition.git
-cd speech-emotion-recognition
-```
-
-### 2. Create a virtual environment
+Create a virtual environment:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
 
-### 3. Install dependencies
+Train the model:
 
 ```bash
-pip install -r requirements.txt
+python -m src.training.train --help
 ```
 
-### 4. Train the model
-
-```bash
-python -m src.training.train --data-dir data/raw --output models/cnn_lstm.pt
-```
-
-### 5. Run local inference
-
-```bash
-python -m src.inference.predict --input sample.wav
-```
-
-### 6. Start the API
+Run the API locally:
 
 ```bash
 uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
 
-Open the API docs at: http://localhost:8000/docs
+Then open:
+- http://localhost:8000/docs
 
-## Testing
-Run locally:
-flake8 src api --max-line-length=120
-pytest tests/ -v
+## Notes
 
-## License
+- This is a research-style baseline project.
+- Dataset availability and preprocessing assumptions should be checked before running training.
+- No public accuracy benchmark is claimed in this repository.
+- This project is intended to demonstrate ML engineering and audio processing workflow, not to claim deployment-ready performance.
 
-MIT License - Copyright (c) 2026 Ayesha Farhath.
+## Limitations
+
+- The dataset and model performance must be validated separately.
+- Audio quality, class balance, and dataset split choices strongly affect results.
+- Model outputs should be treated as experimental predictions rather than validated business-grade decisions.
+- This project is best viewed as a learning and prototyping project.
