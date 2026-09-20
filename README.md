@@ -2,12 +2,11 @@
 
 > A portfolio-grade system branded as EmoVoice
 
-[![CI](https://github.com/ayeshafarhath/speech-emotion-recognition/actions/workflows/ci.yml/badge.svg)](https://github.com/ayeshafarhath/speech-emotion-recognition/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![License](https://img.shields.io/badge/license-MIT-green)](https://opensource.org/licenses/MIT)
 
-**EmoVoice** is a speech-emotion-recognition portfolio project that turns a short audio recording into a predicted emotion with per-class confidence scores. It combines deterministic audio preprocessing, classical acoustic descriptors, a PyTorch CNN-BiLSTM-Attention baseline, and a small FastAPI inference service.
+**EmoVoice** is a speech-emotion-recognition portfolio project that turns a short audio recording into a predicted emotion with per-class confidence scores. It combines deterministic audio preprocessing, a compact CNN-BiLSTM-Attention baseline, and a documented HTTP API for experimentation and demonstration.
 
 > **Project status:** This is a baseline implementation for engineering demonstration and experimentation. No accuracy claim is made until the model is trained and evaluated on a documented, appropriately licensed dataset.
 
@@ -143,16 +142,10 @@ Example response shape:
 
 The values above are illustrative response-shape examples, not measured project results.
 
-## Testing and CI
-
-Run the local checks with:
-
-```bash
-flake8 .
-pytest tests/
-```
-
-GitHub Actions runs linting, tests, and a Docker build on pushes and pull requests targeting `main`.
+## Testing
+Run locally:
+flake8 src api --max-line-length=120
+pytest tests/ -v
 
 ## Limitations
 
@@ -176,4 +169,4 @@ GitHub Actions runs linting, tests, and a Docker build on pushes and pull reques
 - Publish model cards describing intended use, limitations, and ethical considerations
 
 ## License
-MIT License - Copyright (c) 2026 Ayesha Farhath. This is an original implementation for academic portfolio purposes. Built as a baseline engineering demonstration and not a clinically validated system. See LICENSE file for details.
+MIT License - Copyright (c) 2026 Ayesha Farhath. This is an original implementation for academic portfolio purposes. Built as a baseline engineering demonstration and not a clinically validated system.
