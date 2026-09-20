@@ -1,0 +1,11 @@
+python
+pytorch
+librosa
+fastapi
+docker
+speech-emotion-recognition
+deep-learning
+cnn-bilstm-attention
+machine-learning
+audio-processing
+api
