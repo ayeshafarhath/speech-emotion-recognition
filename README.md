@@ -1,87 +1,224 @@
-# Speech Emotion Recognition
+"""API contract tests."""
 
-A small experimental speech emotion recognition project using Python, PyTorch, and audio feature extraction.
+from pathlib import Path
 
-This repository is designed as a practical baseline for speech classification using audio signals. It is intentionally presented as an experimental project rather than a production-ready or benchmarked system.
+import numpy as np
+import soundfile as sf
+from fastapi.testclient import TestClient
 
-## Project Goal
+import api.main as api_module
 
-The project explores whether short speech clips can be classified into emotion categories using:
-- audio preprocessing
-- feature extraction
-- a neural classifier
-- a simple inference pipeline
+client = TestClient(api_module.app)
 
-## Architecture
 
-The project includes:
-- feature extraction from audio files
-- model definition for a CNN + BiLSTM style architecture
-- training logic
-- prediction/inference flow
-- a small FastAPI application for serving predictions
+def wav_bytes() -> bytes:
+    """Create a short valid WAV payload entirely in memory."""
+    samples = np.zeros(1600, dtype=np.float32)
+    samples[0] = 0.25
+    buffer = __import__("io").BytesIO()
+    sf.write(buffer, samples, 16_000, format="WAV")
+    return buffer.getvalue()
 
-## Tech Stack
 
-- Python
-- PyTorch
-- Librosa
-- NumPy
-- scikit-learn
-- FastAPI
-- Docker
-- pytest
+def test_health_endpoint_returns_ok() -> None:
+    response = client.get("/health")
 
-## Repository Structure
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert "model_available" in body
+    assert "checkpoint" in body
 
-```text
-src/
-  features/
-  inference/
-  models/
-  training/
-api/
-tests/
-requirements.txt
-Dockerfile
-docker-compose.yml
-```
 
-## Getting Started
+def test_predict_rejects_non_wav_files() -> None:
+    response = client.post(
+        "/predict",
+        files={"file": ("sample.txt", b"not audio", "text/plain")},
+    )
 
-Create a virtual environment:
+    assert response.status_code == 415
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-```
 
-Train the model:
+def test_predict_rejects_empty_files() -> None:
+    response = client.post(
+        "/predict",
+        files={"file": ("empty.wav", b"", "audio/wav")},
+    )
 
-```bash
-python -m src.training.train --help
-```
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Uploaded audio is empty"
 
-Run the API locally:
 
-```bash
-uvicorn api.main:app --host 0.0.0.0 --port 8000
-```
+def test_predict_returns_503_when_checkpoint_is_missing(monkeypatch) -> None:
+    missing_checkpoint = Path("/tmp/speech-emotion-checkpoint-does-not-exist.pt")
+    monkeypatch.setattr(api_module, "CHECKPOINT_PATH", missing_checkpoint)
 
-Then open:
-- http://localhost:8000/docs
+    response = client.post(
+        "/predict",
+        files={"file": ("sample.wav", wav_bytes(), "audio/wav")},
+    )
 
-## Notes
+    assert response.status_code == 503
+    assert "unavailable" in response.json()["detail"]
 
-- This is a research-style baseline project.
-- Dataset availability and preprocessing assumptions should be checked before running training.
-- No public accuracy benchmark is claimed in this repository.
-- This project is intended to demonstrate ML engineering and audio processing workflow, not to claim deployment-ready performance.
 
-## Limitations
+def test_predict_returns_valid_prediction_contract(monkeypatch, tmp_path: Path) -> None:
+    checkpoint = tmp_path / "cnn_lstm.pt"
+    checkpoint.write_bytes(b"test checkpoint marker")
+    monkeypatch.setattr(api_module, "CHECKPOINT_PATH", checkpoint)
+    monkeypatch.setattr(
+        api_module,
+        "predict",
+        lambda input_path, checkpoint_path: {
+            "emotion": "happy",
+            "confidence_scores": {
+                "happy": 0.91,
+                "sad": 0.04,
+                "angry": 0.03,
+                "neutral": 0.02,
+            },
+            "processing_time_ms": 12.5,
+        },
+    )
 
-- The dataset and model performance must be validated separately.
-- Audio quality, class balance, and dataset split choices strongly affect results.
-- Model outputs should be treated as experimental predictions rather than validated business-grade decisions.
-- This project is best viewed as a learning and prototyping project.
+    response = client.post(
+        "/predict",
+        files={"file": ("sample.wav", wav_bytes(), "audio/wav")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["emotion"] == "happy"
+    assert body["confidence_scores"]["happy"] == 0.91
+    assert body["confidence_scores"]["sad"] == 0.04
+    assert body["processing_time_ms"] == 12.5
+
+
+def test_prediction_rejects_non_audio_but_with_known_extension(monkeypatch, tmp_path: Path) -> None:
+    checkpoint = tmp_path / "cnn_lstm.pt"
+    checkpoint.write_bytes(b"test checkpoint marker")
+    monkeypatch.setattr(api_module, "CHECKPOINT_PATH", checkpoint)
+    response = client.post(
+        "/predict",
+        files={"file": ("sample.wav", b"notvalidaudio", "audio/wav")},
+    )
+    assert response.status_code in {400, 422, 500}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
