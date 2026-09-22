@@ -1,388 +1,100 @@
-# Speech Emotion Recognition
+# Dataset documentation
 
-## Overview
+## Status
 
-This repository implements a speech emotion recognition baseline based on short audio recordings and handcrafted acoustic features. The project is intentionally framed as a reproducible ML engineering effort rather than a production-ready system.
+Dataset provenance could not be fully verified from the repository alone. This project does not ship a dataset, and no dataset files are committed to the repository. The repository expects a local labeled dataset to be prepared by the user.
 
-The current implementation is organized around:
+The project therefore documents the expected workflow and required structure without claiming a specific dataset has been verified in this repository.
 
-- audio validation and loading
-- feature extraction from short waveform segments
-- a CNN + BiLSTM + attention classifier
-- deterministic train/validation/test splitting
-- model checkpointing
-- FastAPI inference
-- Docker-based runtime startup
-- lightweight automated tests
+## Expected dataset format
 
-## Problem
+The training code expects a folder-structured dataset in which each class is a top-level directory and each file is an audio recording.
 
-Speech emotion recognition is a challenging multivariate audio classification problem. A model must cope with:
-
-- class imbalance
-- speaker variability
-- audio quality differences
-- inconsistent recording conditions
-- label ambiguity
-
-A repository can only be considered portfolio-grade if the dataset, split methodology, and evaluation pipeline are documented and reproducible.
-
-## Solution
-
-This project provides a minimal but structured pipeline for:
-
-1. loading audio and validating it
-2. extracting fixed-length acoustic features
-3. training a baseline classifier
-4. saving model checkpoints with metadata
-5. serving predictions via FastAPI
-6. running lightweight validation tests
-
-This project should be viewed as a defensible experimental baseline, not as an already-validated commercial system.
-
-## Architecture
-
-```text
-Audio file
-  ↓
-Validation
-  ↓
-Preprocessing
-  ↓
-Feature extraction
-  ↓
-Train / validation / test split
-  ↓
-CNN-BiLSTM-Attention model
-  ↓
-Checkpoint + metrics
-  ↓
-FastAPI prediction service
-  ↓
-Docker runtime
-```
-
-## Dataset
-
-The repository does not contain a dataset. The expected workflow is to acquire a labeled audio dataset and organize it into class directories, as documented in `DATASET.md`.
-
-Dataset provenance could not be fully verified from the repository. The project intentionally documents this limitation rather than guessing at a dataset source.
-
-## Dataset Preparation
-
-The repository expects a folder-based structure similar to:
+Example:
 
 ```text
 data/
   angry/
-    speaker_001_001.wav
-    speaker_001_002.wav
+    sample_001.wav
+    sample_002.wav
   happy/
-    speaker_002_001.wav
+    sample_001.wav
   neutral/
-    speaker_003_001.wav
+    sample_001.wav
   sad/
-    speaker_004_001.wav
+    sample_001.wav
 ```
 
-The exact directory layout should match the dataset used in the training run. The split strategy is documented in `src/training/train.py` and `DATASET.md`.
+The repository reads all files under each label directory and accepts the following audio extensions:
 
-## Data Split
+- .wav
+- .flac
+- .mp3
+- .ogg
+- .m4a
 
-The project supports deterministic splitting with a fixed random seed.
+## Known assumptions
 
-A speaker-aware split is supported when speaker metadata can be inferred from the dataset structure. If speaker IDs are not available, the repository falls back to a deterministic stratified split and explicitly documents the limitation.
+The training pipeline currently uses the following assumptions:
 
-The project does not claim speaker-independent generalization unless the dataset and metadata support it.
+- sample rate: 16,000 Hz
+- clip duration: 5.0 seconds
+- mono audio
+- fixed-length waveform normalization
+- deterministic file ordering for consistent processing
 
-## Feature Extraction
+These assumptions are defined in the feature extraction and training configuration in `src/features/audio.py` and `src/training/train.py`.
 
-The extracted acoustic vector includes summary statistics for:
+## Speaker leakage
 
-- MFCCs
-- delta MFCCs
-- chroma features
-- mel spectrogram features
-- spectral contrast
-- zero-crossing rate
-- RMS energy
+Speaker leakage is a serious issue in emotion recognition projects. If the same speaker appears in both training and test sets, report quality can be overestimated.
 
-All features are normalized to deterministic fixed-size outputs and validated for finite values.
+The repository supports speaker-aware splitting when speaker metadata can be inferred from the dataset layout. The training pipeline will attempt to infer a speaker identifier from a file path or directory structure when possible.
 
-## Models
+If the dataset does not contain speaker metadata or the structure does not support reliable inference, the project falls back to a deterministic stratified split and explicitly documents that speaker-independent evaluation cannot be guaranteed.
 
-### Primary model
+## Required metadata
 
-The primary model is a CNN + BiLSTM + attention model implemented in `src/models/cnn_lstm.py`.
+For the most defensible evaluation, the dataset should include:
 
-### Baseline philosophy
+- speaker identifier
+- file path
+- label
+- split assignment (train / validation / test)
 
-A simple baseline is supported in the training pipeline but should be used intentionally to answer the question: "Does the more complex model provide meaningful improvement over a simpler classifier?"
+When speaker metadata is absent, the project cannot honestly claim speaker-independent performance.
 
-The repository does not claim that the advanced model is always better without running the comparison on the same split.
+## Official source
 
-## Training
+This repository does not include an official dataset reference. The user must obtain the dataset from an official, legally usable source and verify license terms before training.
 
-The training workflow is implemented in `src/training/train.py`.
+## License and usage restrictions
 
-It includes:
+The repository does not assume or claim a license for any external dataset. Any dataset used must comply with its own licensing and terms of use.
 
-- deterministic seeding
-- train/validation/test splitting
-- feature extraction from labelled audio files
-- class-weighted cross-entropy
-- early stopping
-- checkpoint saving with metadata
+## Dataset preparation workflow
 
-The training script can be used as follows:
+1. Acquire a labeled emotion dataset from an official source.
+2. Organize files by class folder.
+3. Verify audio sampling rate and format.
+4. Confirm per-class label counts.
+5. Apply a deterministic split.
+6. Confirm the split is speaker-aware if possible.
+7. Run the training script.
 
-```bash
-python -m src.training.train --data-dir /path/to/data --output models/cnn_lstm.pt
-```
+## Missing information
 
-## Evaluation
+The exact dataset used by this repository could not be verified from the codebase alone. The following facts are therefore not claimed:
 
-The repository contains a reproducible evaluation pipeline in the training code. It produces actual metrics only when a dataset and checkpoint are available.
+- exact dataset name
+- exact number of samples
+- exact class distribution
+- exact train/validation/test counts
+- speaker count
+- final benchmark numbers
 
-The metrics intended for evaluation include:
-
-- accuracy
-- precision
-- recall
-- F1-score
-- macro F1
-- weighted F1
-- confusion matrix
-- per-class metrics
-- class distribution
-
-At this point, no verified metrics are included in the repository because the project does not ship a dataset or a trained checkpoint.
-
-## Results
-
-No verified model metrics are currently reported in this repository.
-
-This repository does not claim real accuracy, F1, or benchmark results without a real dataset and a completed training run.
-
-## Error Analysis
-
-Error analysis is implemented as a valid evaluation step when the training pipeline is run on a real dataset. The workflow is designed to report:
-
-- confused emotion pairs
-- weak classes
-- class imbalance effects
-- audio-quality issues
-- speaker variability effects
-
-If the dataset is unavailable or the model has not been trained, this analysis remains pending.
-
-## API
-
-The FastAPI app is defined in `api/main.py`.
-
-It provides:
-
-- `GET /health`
-- `POST /predict`
-- `POST /predict-realtime`
-
-The API validates file type, file size, empty payloads, and missing checkpoints.
-
-Example usage:
-
-```bash
-uvicorn api.main:app --host 0.0.0.0 --port 8000
-```
-
-Example request:
-
-```bash
-curl -X POST "http://localhost:8000/predict" \
-  -F "file=@/path/to/sample.wav"
-```
-
-## Docker
-
-A Dockerfile and docker-compose configuration are included. These provide a runtime environment for the API and a sane CPU-based setup.
-
-The project should be treated as a locally runnable ML service baseline, not a production deployment.
-
-## Testing
-
-The project includes automated tests for:
-
-- audio loading
-- feature extraction
-- invalid audio handling
-- API contract validation
-- checkpoint unavailability behavior
-
-Run tests with:
-
-```bash
-pytest tests/ -q
-```
-
-## Project Structure
-
-```text
-speech-emotion-recognition/
-├── api/
-│   └── main.py
-├── src/
-│   ├── features/
-│   │   └── audio.py
-│   ├── inference/
-│   │   └── predict.py
-│   ├── models/
-│   │   ├── cnn_lstm.py
-│   │   └── wav2vec_finetune.py
-│   └── training/
-│       └── train.py
-├── tests/
-│   ├── test_api.py
-│   └── test_features.py
-├── DATASET.md
-├── Dockerfile
-├── README.md
-├── requirements.txt
-├── .flake8
-├── .gitignore
-├── LICENSE
-├── docker-compose.yml
-└── .github/workflows/ci.yml
-```
-
-## Installation
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
-
-System dependencies may also be required for audio processing:
-
-```bash
-sudo apt-get update
-sudo apt-get install -y ffmpeg libsndfile1
-```
-
-## Usage
-
-Train a model from a labeled dataset:
-
-```bash
-python -m src.training.train --data-dir /path/to/data --output models/cnn_lstm.pt
-```
-
-Run the API:
-
-```bash
-uvicorn api.main:app --host 0.0.0.0 --port 8000
-```
-
-Run Docker:
-
-```bash
-docker build -t speech-emotion-recognition .
-docker run --rm -p 8000:8000 speech-emotion-recognition
-```
-
-## Limitations
-
-The project has several important limitations that must be documented honestly:
-
-- The dataset is not shipped in the repository.
-- Dataset provenance could not be fully verified from the repo alone.
-- Speaker independence cannot be guaranteed unless metadata is explicitly available and validated.
-- The project currently provides a foundation for reproducible training and evaluation, not a fully validated benchmark.
-- Model results must be generated by running the actual training pipeline on a real dataset.
-- Audio quality and class imbalance can strongly affect performance.
-
-## Future Improvements
-
-- add a stricter speaker-aware data split when dataset metadata is available
-- add a real baseline comparison
-- add a more detailed experiment report
-- improve evaluation artifact handling
-- compare feature extraction strategies
-- add stronger API validation around invalid audio and duration
-- add richer CI smoke testing
-
-## License
-
-This project is licensed under the MIT License.
+The project remains intentionally honest about this limitation.
 
 ---
 
-This repository is best understood as a reproducible experimental baseline for speech emotion recognition, not as a benchmark-validated commercial system.
-
-The project is intentionally honest about what has and has not been verified.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+This document is not a claim that the dataset is available or validated. It is a clear statement of the repository’s expected dataset contract and the constraints under which the project should be used.

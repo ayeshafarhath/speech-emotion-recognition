@@ -1,132 +1,200 @@
-# Dataset documentation
-
-## Status
-
-Dataset provenance could not be fully verified from the repository alone. This project does not ship a dataset, and no dataset files are committed to the repository. The repository expects a local labeled dataset to be prepared by the user.
-
-The project therefore documents the expected workflow and required structure without claiming a specific dataset has been verified in this repository.
-
-## Expected dataset format
-
-The training code expects a folder-structured dataset in which each class is a top-level directory and each file is an audio recording.
-
-Example:
-
-```text
-data/
-  angry/
-    sample_001.wav
-    sample_002.wav
-  happy/
-    sample_001.wav
-  neutral/
-    sample_001.wav
-  sad/
-    sample_001.wav
-```
-
-The repository reads all files under each label directory and accepts the following audio extensions:
-
-- .wav
-- .flac
-- .mp3
-- .ogg
-- .m4a
-
-## Known assumptions
-
-The training pipeline currently uses the following assumptions:
-
-- sample rate: 16,000 Hz
-- clip duration: 5.0 seconds
-- mono audio
-- fixed-length waveform normalization
-- deterministic file ordering for consistent processing
-
-These assumptions are defined in the feature extraction and training configuration in `src/features/audio.py` and `src/training/train.py`.
-
-## Speaker leakage
-
-Speaker leakage is a serious issue in emotion recognition projects. If the same speaker appears in both training and test sets, report quality can be overestimated.
-
-The repository supports speaker-aware splitting when speaker metadata can be inferred from the dataset layout. The training pipeline will attempt to infer a speaker identifier from a file path or directory structure when possible.
-
-If the dataset does not contain speaker metadata or the structure does not support reliable inference, the project falls back to a deterministic stratified split and explicitly documents that speaker-independent evaluation cannot be guaranteed.
-
-## Required metadata
-
-For the most defensible evaluation, the dataset should include:
-
-- speaker identifier
-- file path
-- label
-- split assignment (train / validation / test)
-
-When speaker metadata is absent, the project cannot honestly claim speaker-independent performance.
-
-## Official source
-
-This repository does not include an official dataset reference. The user must obtain the dataset from an official, legally usable source and verify license terms before training.
-
-## License and usage restrictions
-
-The repository does not assume or claim a license for any external dataset. Any dataset used must comply with its own licensing and terms of use.
-
-## Dataset preparation workflow
-
-1. Acquire a labeled emotion dataset from an official source.
-2. Organize files by class folder.
-3. Verify audio sampling rate and format.
-4. Confirm per-class label counts.
-5. Apply a deterministic split.
-6. Confirm the split is speaker-aware if possible.
-7. Run the training script.
-
-## Missing information
-
-The exact dataset used by this repository could not be verified from the codebase alone. The following facts are therefore not claimed:
-
-- exact dataset name
-- exact number of samples
-- exact class distribution
-- exact train/validation/test counts
-- speaker count
-- final benchmark numbers
-
-The project remains intentionally honest about this limitation.
-
----
-
-This document is not a claim that the dataset is available or validated. It is a clear statement of the repository’s expected dataset contract and the constraints under which the project should be used.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+"""Train the CNN-BiLSTM baseline on a folder-labelled audio dataset."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import random
+from dataclasses import asdict, dataclass
+from pathlib import Path
+
+import numpy as np
+import torch
+from sklearn.model_selection import train_test_split
+from torch import Tensor, nn
+from torch.utils.data import DataLoader, TensorDataset
+
+from src.features.audio import SUPPORTED_AUDIO_EXTENSIONS, extract_features_from_file
+from src.models.cnn_lstm import CNNBiLSTMAttention
+
+
+@dataclass(frozen=True)
+class TrainingConfig:
+    data_dir: str
+    output: str = "models/cnn_lstm.pt"
+    sample_rate: int = 16_000
+    duration_seconds: float = 5.0
+    test_size: float = 0.2
+    validation_size: float = 0.2
+    batch_size: int = 32
+    epochs: int = 30
+    learning_rate: float = 1e-3
+    patience: int = 6
+    seed: int = 42
+
+
+def seed_everything(seed: int) -> None:
+    """Make data splits and model initialization repeatable."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
+def collect_records(data_dir: Path) -> tuple[list[Path], list[str]]:
+    """Collect audio files from ``data_dir/<label>/file`` directories."""
+    if not data_dir.is_dir():
+        raise FileNotFoundError(f"dataset directory does not exist: {data_dir}")
+    paths: list[Path] = []
+    labels: list[str] = []
+    for label_dir in sorted(path for path in data_dir.iterdir() if path.is_dir()):
+        for path in sorted(label_dir.rglob("*")):
+            if path.is_file() and path.suffix.lower() in SUPPORTED_AUDIO_EXTENSIONS:
+                paths.append(path)
+                labels.append(label_dir.name.lower())
+    if len(set(labels)) < 2:
+        raise ValueError("dataset must contain at least two emotion directories")
+    return paths, labels
+
+
+def build_arrays(config: TrainingConfig) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    """Extract features and encode labels in deterministic alphabetical order."""
+    paths, labels = collect_records(Path(config.data_dir))
+    class_names = sorted(set(labels))
+    class_to_index = {label: index for index, label in enumerate(class_names)}
+    vectors: list[np.ndarray] = []
+    encoded: list[int] = []
+    for path, label in zip(paths, labels):
+        vectors.append(
+            extract_features_from_file(
+                path,
+                sample_rate=config.sample_rate,
+                duration_seconds=config.duration_seconds,
+            )
+        )
+        encoded.append(class_to_index[label])
+    return np.asarray(vectors, dtype=np.float32), np.asarray(encoded, dtype=np.int64), class_names
+
+
+def split_data(features: np.ndarray, labels: np.ndarray, config: TrainingConfig):
+    """Create stratified train, validation, and test partitions."""
+    train_val_x, test_x, train_val_y, test_y = train_test_split(
+        features,
+        labels,
+        test_size=config.test_size,
+        random_state=config.seed,
+        stratify=labels,
+    )
+    relative_validation_size = config.validation_size / (1.0 - config.test_size)
+    train_x, validation_x, train_y, validation_y = train_test_split(
+        train_val_x,
+        train_val_y,
+        test_size=relative_validation_size,
+        random_state=config.seed,
+        stratify=train_val_y,
+    )
+    return train_x, train_y, validation_x, validation_y, test_x, test_y
+
+
+def make_loader(features: np.ndarray, labels: np.ndarray, batch_size: int, shuffle: bool) -> DataLoader:
+    """Convert fixed vectors to one-step sequences accepted by the model."""
+    tensors = TensorDataset(torch.from_numpy(features).unsqueeze(1), torch.from_numpy(labels))
+    return DataLoader(tensors, batch_size=batch_size, shuffle=shuffle)
+
+
+def class_weights(labels: np.ndarray, classes: int) -> Tensor:
+    """Return inverse-frequency weights for imbalanced training data."""
+    counts = np.bincount(labels, minlength=classes).astype(np.float32)
+    if np.any(counts == 0):
+        raise ValueError("every class must be represented in the training partition")
+    weights = counts.sum() / (classes * counts)
+    return torch.tensor(weights, dtype=torch.float32)
+
+
+def evaluate(model: nn.Module, loader: DataLoader, criterion: nn.Module, device: torch.device) -> float:
+    model.eval()
+    total_loss = 0.0
+    total_items = 0
+    with torch.inference_mode():
+        for features, labels in loader:
+            logits = model(features.to(device))
+            loss = criterion(logits, labels.to(device))
+            total_loss += float(loss) * labels.size(0)
+            total_items += labels.size(0)
+    return total_loss / max(total_items, 1)
+
+
+def train_model(config: TrainingConfig) -> dict:
+    seed_everything(config.seed)
+    features, labels, class_names = build_arrays(config)
+    train_x, train_y, validation_x, validation_y, test_x, test_y = split_data(features, labels, config)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = CNNBiLSTMAttention(features.shape[1], len(class_names)).to(device)
+    criterion = nn.CrossEntropyLoss(weight=class_weights(train_y, len(class_names)).to(device))
+    optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", patience=2, factor=0.5)
+    train_loader = make_loader(train_x, train_y, config.batch_size, shuffle=True)
+    validation_loader = make_loader(validation_x, validation_y, config.batch_size, shuffle=False)
+    test_loader = make_loader(test_x, test_y, config.batch_size, shuffle=False)
+
+    best_validation_loss = float("inf")
+    best_state: dict[str, Tensor] | None = None
+    epochs_without_improvement = 0
+    for _ in range(config.epochs):
+        model.train()
+        for batch_features, batch_labels in train_loader:
+            optimizer.zero_grad(set_to_none=True)
+            loss = criterion(model(batch_features.to(device)), batch_labels.to(device))
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
+        validation_loss = evaluate(model, validation_loader, criterion, device)
+        scheduler.step(validation_loss)
+        if validation_loss < best_validation_loss:
+            best_validation_loss = validation_loss
+            best_state = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+            if epochs_without_improvement >= config.patience:
+                break
+
+    if best_state is None:
+        raise RuntimeError("training did not produce a checkpoint")
+    model.load_state_dict(best_state)
+    test_loss = evaluate(model, test_loader, criterion, device)
+    output_path = Path(config.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save({
+        "model_state_dict": model.state_dict(),
+        "input_features": features.shape[1],
+        "class_names": class_names,
+        "sample_rate": config.sample_rate,
+        "duration_seconds": config.duration_seconds,
+        "config": asdict(config),
+        "test_loss": test_loss,
+    }, output_path)
+    return {"output": str(output_path), "classes": class_names, "test_loss": test_loss}
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--data-dir", required=True, type=Path)
+    parser.add_argument("--output", default="models/cnn_lstm.pt")
+    parser.add_argument("--epochs", default=30, type=int)
+    parser.add_argument("--batch-size", default=32, type=int)
+    parser.add_argument("--seed", default=42, type=int)
+    args = parser.parse_args()
+    config = TrainingConfig(
+        data_dir=str(args.data_dir),
+        output=args.output,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        seed=args.seed,
+    )
+    print(json.dumps(train_model(config), indent=2))
+
+
+if __name__ == "__main__":
+    main()
